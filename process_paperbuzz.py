@@ -18,6 +18,7 @@ import csv
 import json
 import subprocess
 import sys
+import datetime
 
 try:
     __IPYTHON__
@@ -29,11 +30,11 @@ else:
 
 csv.field_size_limit(sys.maxsize)
 
-input_csv = "paperbuzz.csv"
-output_csv = "paperbuzz_metrics.csv"
+input_csv = "data/paperbuzz.csv"
+output_csv = "data/paperbuzz_metrics.csv"
 
 print("Counting lines using 'wc -l'")
-line_count = int(subprocess.check_output(['wc', '-l', "paperbuzz.csv"]).split()[0]) - 1
+line_count = int(subprocess.check_output(['wc', '-l', input_csv]).split()[0]) - 1
 print("{} lines in CSV".format(line_count))
 
 # +
@@ -55,7 +56,8 @@ sources = list(sources)
 
 # +
 cols = ["id","doi","date","status","response","timestamp"]
-out_cols = ["id", "doi", "date"] + sources
+meta_cols = ["article_type", "is_oa", "n_authors", "journal_title", "title"]
+out_cols = ["id", "doi", "date"] + sources + meta_cols
 
 with open(input_csv, "r") as input_f:
     csv_reader = csv.DictReader(input_f)
@@ -69,11 +71,44 @@ with open(input_csv, "r") as input_f:
             r = row['response']
             if not r in ["None", "{}", ""]:
                 j = json.loads(r)
+                outrow = [row['id'], row['doi'], row['date']]
+                
+                # Extract metrics
                 metrics = {k:0 for k in sources}
                 if 'altmetrics_sources' in j:
                     for s in j['altmetrics_sources']:
                         metrics[s['source_id']] = int(s['events_count'])
-                outrow = [row['id'], row['doi'], row['date']]
                 for s in sources:
                     outrow.append(metrics[s])
+                
+                # Extract metadata
+                metadata = {k:None for k in meta_cols}
+                try:
+                    metadata['article_type'] = j['metadata']['type']
+                except:
+                    pass
+        
+                try:
+                    metadata['n_authors'] = len(j['metadata']['author'])
+                except:
+                    pass
+                
+                try:
+                    metadata['journal_title'] = j['metadata']['container-title']
+                except:
+                    pass
+                
+                try:
+                    metadata['title'] = j['metadata']['title']
+                except:
+                    pass
+                
+                try:
+                    metadata['is_oa'] = j['open_access']['is_oa']
+                except:
+                    pass
+                
+                for m in meta_cols:
+                    outrow.append(metadata[m])
+                    
                 csv_writer.writerow(outrow)
